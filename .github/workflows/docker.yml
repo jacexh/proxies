@@ -1,0 +1,35 @@
+name: Build and Publish Docker Image
+on:
+  push:
+    branches:
+    - master
+    tags:
+    - v*
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    name: Build and Publish Docker Image
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+    - name: Docker meta
+      uses: docker/metadata-action@v5
+      id: meta
+      with:
+        images: ghcr.io/jacexh/proxies
+        tags: |
+          type=sha,prefix={{branch}}-
+          type=ref,event=tag
+    - name: Login to  GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}

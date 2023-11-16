@@ -90,6 +90,8 @@ func (rp *ReverseProxy) Director(out *http.Request) {
 	out.URL.Host = rp.Host
 	out.Host = rp.Host
 	out.URL.Path = out.URL.Path[len(rp.Prefix):]
+
+	slog.Info("access remote address", slog.String("host", out.Host), slog.String("request_uri", out.URL.Path))
 }
 
 func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
