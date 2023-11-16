@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   proxies:
-    image: jacexh/proxies:latest
+    image: ghcr.io/jacexh/proxies:latest
     container_name: proxies
     restart: unless-stopped
     command: /app/proxies
