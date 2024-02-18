@@ -1,6 +1,7 @@
 package proxies
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -20,7 +21,15 @@ type (
 		Prefix string
 		Proxy  *httputil.ReverseProxy
 	}
+
+	keyCtx struct {
+		key string
+	}
 )
+
+var defaultKey = &keyCtx{
+	key: "remote",
+}
 
 func NewMultipleReverseProxy() *MultipleReverseProxy {
 	return &MultipleReverseProxy{
@@ -56,6 +65,7 @@ func (mp *MultipleReverseProxy) ServeHTTP(w http.ResponseWriter, in *http.Reques
 		upstream = newUpstream
 	}
 
+	in = saveRemoteAddr(in)
 	upstream.ServeHTTP(w, in)
 }
 
@@ -91,9 +101,25 @@ func (rp *ReverseProxy) Director(out *http.Request) {
 	out.Host = rp.Host
 	out.URL.Path = out.URL.Path[len(rp.Prefix):]
 
-	slog.Info("access remote address", slog.String("host", out.Host), slog.String("request_uri", out.URL.Path), slog.String("client_ip", out.RemoteAddr), slog.String("user_agent", out.UserAgent()))
+	slog.Info("access remote address",
+		slog.String("host", out.Host),
+		slog.String("request_uri", out.URL.Path),
+		slog.String("client_ip", fromCtx(out)),
+		slog.String("user_agent", out.UserAgent()))
 }
 
 func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rp.Proxy.ServeHTTP(w, r)
+}
+
+func saveRemoteAddr(in *http.Request) *http.Request {
+	return in.WithContext(context.WithValue(in.Context(), defaultKey, in.RemoteAddr))
+}
+
+func fromCtx(out *http.Request) string {
+	remote, ok := out.Context().Value(defaultKey).(string)
+	if !ok {
+		return ""
+	}
+	return remote
 }
