@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -27,9 +29,15 @@ type (
 	}
 )
 
-var defaultKey = &keyCtx{
-	key: "remote",
-}
+var (
+	defaultKey = &keyCtx{
+		key: "remote",
+	}
+
+	trueClientIP  = http.CanonicalHeaderKey("True-Client-IP")
+	xForwardedFor = http.CanonicalHeaderKey("X-Forwarded-For")
+	xRealIP       = http.CanonicalHeaderKey("X-Real-IP")
+)
 
 func NewMultipleReverseProxy() *MultipleReverseProxy {
 	return &MultipleReverseProxy{
@@ -65,8 +73,8 @@ func (mp *MultipleReverseProxy) ServeHTTP(w http.ResponseWriter, in *http.Reques
 		upstream = newUpstream
 	}
 
-	in = saveRemoteAddr(in)
-	upstream.ServeHTTP(w, in)
+	nin := saveRemoteAddr(in)
+	upstream.ServeHTTP(w, nin)
 }
 
 // /proxy/google.com/search?q=proxy&newwindow=1
@@ -113,7 +121,7 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func saveRemoteAddr(in *http.Request) *http.Request {
-	return in.WithContext(context.WithValue(in.Context(), defaultKey, in.RemoteAddr))
+	return in.WithContext(context.WithValue(in.Context(), defaultKey, realIP(in)))
 }
 
 func fromCtx(out *http.Request) string {
@@ -122,4 +130,24 @@ func fromCtx(out *http.Request) string {
 		return ""
 	}
 	return remote
+}
+
+func realIP(r *http.Request) string {
+	var ip string
+
+	if tcip := r.Header.Get(trueClientIP); tcip != "" {
+		ip = tcip
+	} else if xrip := r.Header.Get(xRealIP); xrip != "" {
+		ip = xrip
+	} else if xff := r.Header.Get(xForwardedFor); xff != "" {
+		i := strings.Index(xff, ",")
+		if i == -1 {
+			i = len(xff)
+		}
+		ip = xff[:i]
+	}
+	if ip == "" || net.ParseIP(ip) == nil {
+		ip = strings.Split(r.RemoteAddr, ":")[0]
+	}
+	return ip
 }
